@@ -27,6 +27,7 @@ import {
 import { useWakuChat } from '@/hooks/useWakuChat';
 import axios from 'axios';
 import { useNodeStatus } from '@/hooks/useNodeStatus';
+import { useOperatorMode } from '@/hooks/useOperatorMode';
 
 const container = {
   hidden: { opacity: 0 },
@@ -467,7 +468,10 @@ export const StatusScreen: React.FC = () => {
 };
 
 // Add this new component after other screen components
-export const NodeStatusScreen: React.FC<{ isRunning: boolean }> = ({ isRunning }) => {
+export const NodeStatusScreen: React.FC<{ isRunning: boolean; onToggle: () => void }> = ({ isRunning, onToggle }) => {
+  const isNodeActive = useNodeStatus();
+  const { isSubscribed } = useOperatorMode(isNodeActive, isRunning);
+
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Node Status</h1>

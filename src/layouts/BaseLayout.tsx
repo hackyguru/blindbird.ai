@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Home, Users, History, Plus, Moon, Sun, RadioTower, Settings, Download, Network, MessageCircle, Info, Cog, Link2, Activity, Bot, FolderSearch, X } from "lucide-react";
+import { Home, Users, History, Plus, Moon, Sun, RadioTower, Settings, Download, Network, MessageCircle, Info, Cog, Link2, Activity, Bot, FolderSearch, X, Play, Pause } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -305,39 +305,92 @@ const InferenceModeNav = ({
 };
 
 // Component for operator mode navigation
-const OperatorModeNav = ({ setActiveRoute, activeRoute }: { setActiveRoute: (route: Route) => void; activeRoute: Route }) => (
-  <motion.div
-    className="space-y-1"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-  >
-    <div onClick={() => setActiveRoute('configuration')}>
-      <NavItem 
-        icon={<Cog size={16} />} 
-        label="Configuration" 
-        route="configuration"
-        currentRoute={activeRoute}
-      />
-    </div>
-    <div onClick={() => setActiveRoute('connections')}>
-      <NavItem 
-        icon={<Link2 size={16} />} 
-        label="Connections" 
-        route="connections"
-        currentRoute={activeRoute}
-      />
-    </div>
-    <div onClick={() => setActiveRoute('status')}>
-      <NavItem 
-        icon={<Activity size={16} />} 
-        label="Status" 
-        route="status"
-        currentRoute={activeRoute}
-      />
-    </div>
-  </motion.div>
-);
+const OperatorModeNav = ({ setActiveRoute, activeRoute }: { setActiveRoute: (route: Route) => void; activeRoute: Route }) => {
+  const [isRunning, setIsRunning] = useState(false);
+
+  return (
+    <motion.div
+      className="space-y-1"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <Button 
+        variant="outline" 
+        className={cn(
+          "w-full h-10 justify-start text-[13px] rounded-xl backdrop-blur-sm",
+          isRunning
+            ? "bg-emerald-400/10 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200/50 dark:border-emerald-500/20"
+            : "text-gray-600 dark:text-neutral-400 border-gray-200 dark:border-neutral-800 hover:bg-gray-100/50 dark:hover:bg-neutral-800/50"
+        )}
+        onClick={() => setIsRunning(!isRunning)}
+      >
+        <motion.div
+          initial={false}
+          animate={{ rotate: isRunning ? 0 : 0 }}
+          className="mr-3 h-4 w-4"
+        >
+          {isRunning ? (
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: 180 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              <Pause className="h-4 w-4" />
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ scale: 0, rotate: 180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: -180 }}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+            >
+              <Play className="h-4 w-4" />
+            </motion.div>
+          )}
+        </motion.div>
+        {isRunning ? 'Running' : 'Start'}
+      </Button>
+
+      {/* Options Section */}
+      <div className="py-3">
+        <div className="px-3 py-1">
+          <p className="text-xs font-medium text-gray-500 dark:text-neutral-500 uppercase tracking-wider">
+            Options
+          </p>
+        </div>
+
+        <div className="space-y-1">
+          <div onClick={() => setActiveRoute('configuration')}>
+            <NavItem 
+              icon={<Cog size={16} />} 
+              label="Configuration" 
+              route="configuration"
+              currentRoute={activeRoute}
+            />
+          </div>
+          <div onClick={() => setActiveRoute('connections')}>
+            <NavItem 
+              icon={<Link2 size={16} />} 
+              label="Connections" 
+              route="connections"
+              currentRoute={activeRoute}
+            />
+          </div>
+          <div onClick={() => setActiveRoute('status')}>
+            <NavItem 
+              icon={<Activity size={16} />} 
+              label="Status" 
+              route="status"
+              currentRoute={activeRoute}
+            />
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 // Component for mode switcher
 const ModeSwitcher = ({ isNetwork, setIsNetwork }: { isNetwork: boolean; setIsNetwork: (value: boolean) => void }) => (

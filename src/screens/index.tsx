@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shuffle, Grid, FileText } from 'lucide-react';
+import { Shuffle, Grid, FileText, Activity, Pause, Network, Play } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -411,6 +411,85 @@ export const StatusScreen: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 max-w-md">
             View your node's current status, performance metrics, and network statistics.
           </p>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Add this new component after other screen components
+export const NodeStatusScreen: React.FC<{ isRunning: boolean }> = ({ isRunning }) => {
+  return (
+    <div className="flex flex-col h-full p-6 rounded-3xl">
+      <h1 className="text-2xl font-semibold mb-4">Node Status</h1>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-6">
+          {isRunning ? (
+            <>
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-400/10 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-4">
+                <motion.div
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                >
+                  <Activity className="w-10 h-10" />
+                </motion.div>
+              </div>
+              <h2 className="text-2xl font-medium text-emerald-600 dark:text-emerald-400">Node is Running</h2>
+              <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                Your node is actively participating in the network, processing requests and contributing to the decentralized infrastructure.
+              </p>
+              <div className="flex flex-col items-center space-y-4 mt-8">
+                <div className="grid grid-cols-2 gap-4 w-full max-w-md">
+                  <div className="flex flex-col items-center p-4 bg-white/40 dark:bg-neutral-900/40 rounded-xl backdrop-blur-xl border border-white/20 dark:border-neutral-800/50">
+                    <span className="text-sm text-gray-500 dark:text-neutral-400">Active Time</span>
+                    <span className="text-2xl font-medium text-gray-800 dark:text-neutral-200 mt-1">2h 34m</span>
+                  </div>
+                  <div className="flex flex-col items-center p-4 bg-white/40 dark:bg-neutral-900/40 rounded-xl backdrop-blur-xl border border-white/20 dark:border-neutral-800/50">
+                    <span className="text-sm text-gray-500 dark:text-neutral-400">Requests Processed</span>
+                    <span className="text-2xl font-medium text-gray-800 dark:text-neutral-200 mt-1">128</span>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 mb-4">
+                <Pause className="w-10 h-10" />
+              </div>
+              <h2 className="text-2xl font-medium text-gray-800 dark:text-neutral-200">Node is Paused</h2>
+              <p className="text-gray-600 dark:text-gray-400 max-w-md">
+                Your node is currently inactive. Start the node to begin processing requests and earning rewards.
+              </p>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Add this new component for the initial operator mode view
+export const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+  return (
+    <div className="flex flex-col h-full p-6 rounded-3xl">
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center space-y-6">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl mb-4">
+            <Network className="w-10 h-10 text-gray-600 dark:text-neutral-400" />
+          </div>
+          <h2 className="text-2xl font-medium text-gray-800 dark:text-neutral-200">Welcome to Operator Mode</h2>
+          <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+            Start your node to begin processing requests and contributing to the decentralized network.
+          </p>
+          <div className="pt-4">
+            <Button
+              onClick={onStart}
+              className="h-12 px-6 rounded-xl bg-emerald-500/80 hover:bg-emerald-500 text-white border-0 shadow-lg shadow-emerald-500/20"
+            >
+              <Play className="w-5 h-5 mr-2" />
+              Start Node
+            </Button>
+          </div>
         </div>
       </div>
     </div>

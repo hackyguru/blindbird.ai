@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Route } from "@/types/routes";
-import { NewChatScreen, NewAgentScreen, BrowseAgentsScreen, ConfigurationScreen, ConnectionsScreen, StatusScreen } from "@/screens";
+import { NewChatScreen, NewAgentScreen, BrowseAgentsScreen, ConfigurationScreen, ConnectionsScreen, StatusScreen, NodeStatusScreen, OperatorWelcomeScreen } from "@/screens";
 import { getChatSessions } from '@/utils/chatStorage';
 import { ChatSession } from '@/types/chat';
 import { cn } from "@/lib/utils";
@@ -305,9 +305,17 @@ const InferenceModeNav = ({
 };
 
 // Component for operator mode navigation
-const OperatorModeNav = ({ setActiveRoute, activeRoute }: { setActiveRoute: (route: Route) => void; activeRoute: Route }) => {
-  const [isRunning, setIsRunning] = useState(false);
-
+const OperatorModeNav = ({ 
+  setActiveRoute, 
+  activeRoute,
+  isRunning,
+  setIsRunning 
+}: { 
+  setActiveRoute: (route: Route) => void; 
+  activeRoute: Route;
+  isRunning: boolean;
+  setIsRunning: (value: boolean) => void;
+}) => {
   return (
     <motion.div
       className="space-y-1"
@@ -323,7 +331,10 @@ const OperatorModeNav = ({ setActiveRoute, activeRoute }: { setActiveRoute: (rou
             ? "bg-emerald-400/10 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-200/50 dark:border-emerald-500/20"
             : "text-gray-600 dark:text-neutral-400 border-gray-200 dark:border-neutral-800 hover:bg-gray-100/50 dark:hover:bg-neutral-800/50"
         )}
-        onClick={() => setIsRunning(!isRunning)}
+        onClick={() => {
+          setIsRunning(!isRunning);
+          setActiveRoute('status');
+        }}
       >
         <motion.div
           initial={false}
@@ -537,6 +548,7 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
   const [isNetwork, setIsNetwork] = useState(false);
   const [activeRoute, setActiveRoute] = useState<Route>('new-chat');
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
+  const [isRunning, setIsRunning] = useState(false);
 
   // Rotation animation effect
   useEffect(() => {
@@ -579,6 +591,14 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
 
   // Function to render the active screen
   const renderActiveScreen = () => {
+    // If in operator mode and no route selected, show welcome screen
+    if (isNetwork && activeRoute === 'new-chat') {
+      return <OperatorWelcomeScreen onStart={() => {
+        setIsRunning(true);
+        setActiveRoute('status');
+      }} />;
+    }
+
     switch (activeRoute) {
       // Inference Mode Screens
       case 'new-chat':
@@ -594,7 +614,7 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
       case 'connections':
         return <ConnectionsScreen />;
       case 'status':
-        return <StatusScreen />;
+        return <NodeStatusScreen isRunning={isRunning} />;
       
       default:
         return <NewChatScreen currentSession={activeSession} onSessionCreate={handleSessionSelect} />;
@@ -638,6 +658,8 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
                 <OperatorModeNav 
                   setActiveRoute={setActiveRoute} 
                   activeRoute={activeRoute}
+                  isRunning={isRunning}
+                  setIsRunning={setIsRunning}
                 />
               )}
             </motion.nav>

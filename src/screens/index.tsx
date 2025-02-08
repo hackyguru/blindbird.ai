@@ -65,20 +65,50 @@ export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, on
   const [selectedModel, setSelectedModel] = useState('gpt-4');
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isNodeActive = useNodeStatus();
-  const { messages, sendMessage } = useWakuChat(isNodeActive, !isNetwork);
+  const { messages, sendMessage, clearMessages } = useWakuChat(isNodeActive, !isNetwork);
 
-  // Auto scroll to bottom when messages change
+  // Clear messages when switching sessions or creating new chat
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    clearMessages();
+  }, [currentSession?.id]);
+
+  // Handle Waku messages and store them in sessions
+  useEffect(() => {
+    if (!isNetwork && messages.length > 0 && currentSession) {
+      const handleWakuMessages = async () => {
+        const existingMessageCount = currentSession.messages.length;
+        const newMessages = messages.slice(existingMessageCount);
+        
+        for (const msg of newMessages) {
+          const content = atob(msg.payload);
+          await addMessageToSession(
+            currentSession.id,
+            content,
+            msg.isResponse ? 'assistant' : 'user'
+          );
+          const updatedSession = await getChatSessions().then(
+            sessions => sessions.find(s => s.id === currentSession.id)
+          );
+          if (updatedSession) {
+            onSessionCreate(updatedSession);
+          }
+        }
+      };
+
+      void handleWakuMessages();
     }
-  }, [messages]);
+  }, [messages, currentSession, isNetwork, onSessionCreate]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
     if (!isNetwork) {
-      // Inference mode - use Waku
+      // Inference mode - create session first if needed
+      if (!currentSession) {
+        const newSession = await createChatSession(inputValue);
+        onSessionCreate(newSession);
+      }
+      // Send message through Waku
       const success = await sendMessage(inputValue);
       if (success) {
         setInputValue('');
@@ -140,7 +170,7 @@ export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, on
       {/* Messages container */}
       <AnimatePresence mode="wait">
         {!currentSession ? (
-          // Welcome screen
+          // Welcome screen with "Hello, Guru"
           <motion.div 
             key="welcome"
             className="flex-1 overflow-auto rounded-3xl"
@@ -220,13 +250,13 @@ export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, on
                 exit={{ opacity: 0 }}
               >
                 <div className="min-h-full flex flex-col justify-end px-8 py-6 pb-32">
-                  {!isNetwork && messages.map((message, index) => (
+                  {currentSession.messages.map((message, index) => (
                     <ChatMessage
-                      key={`${message.timestamp}-${index}`}
+                      key={message.id}
                       message={{
-                        id: message.timestamp.toString(),
-                        content: atob(message.payload),
-                        role: message.isResponse ? 'assistant' : 'user',
+                        id: message.id,
+                        content: message.content,
+                        role: message.sender,
                         timestamp: message.timestamp
                       }}
                     />

@@ -94,7 +94,7 @@ const LogoSection = () => {
       variants={itemVariants}
     >
       <img 
-        src={theme === 'dark' ? '/images/blindbird-white.png' : '/images/blindbird-black.png'} 
+        src={theme !== 'dark' ? '/images/blindbird-white.png' : '/images/blindbird-black.png'} 
         alt="WakuAI" 
         className="w-10 h-10" 
       />

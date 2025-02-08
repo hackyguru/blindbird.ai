@@ -24,6 +24,9 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useWakuChat } from '@/hooks/useWakuChat';
+import axios from 'axios';
+import { useNodeStatus } from '@/hooks/useNodeStatus';
 
 const container = {
   hidden: { opacity: 0 },
@@ -52,68 +55,76 @@ const item = {
 interface NewChatScreenProps {
   currentSession: ChatSession | null;
   onSessionCreate: (session: ChatSession) => void;
+  isNetwork: boolean;
 }
 
 // Inference Mode Screens
-export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSessionCreate }) => {
+export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSessionCreate, isNetwork }) => {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4');
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isNodeActive = useNodeStatus();
+  const { messages, sendMessage } = useWakuChat(isNodeActive, !isNetwork);
 
   // Auto scroll to bottom when messages change
   useEffect(() => {
     if (chatContainerRef.current) {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [currentSession?.messages]);
+  }, [messages]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    try {
-      if (!currentSession) {
-        // Create new session if none exists
-        const newSession = await createChatSession(inputValue);
-        onSessionCreate(newSession);
-
-        // Add mock assistant response after a delay
-        setTimeout(async () => {
-          try {
-            const updatedSession = await addMessageToSession(
-              newSession.id,
-              "I'm here to help! What would you like to know?",
-              'assistant'
-            );
-            onSessionCreate(updatedSession);
-          } catch (error) {
-            console.error('Error sending assistant response:', error);
-          }
-        }, 1000);
-      } else {
-        // Add message to existing session
-        const updatedSession = await addMessageToSession(currentSession.id, inputValue, 'user');
-        onSessionCreate(updatedSession);
-
-        // Add mock assistant response after a delay
-        setTimeout(async () => {
-          try {
-            const responseSession = await addMessageToSession(
-              updatedSession.id,
-              "I understand your message. How can I assist you further?",
-              'assistant'
-            );
-            onSessionCreate(responseSession);
-          } catch (error) {
-            console.error('Error sending assistant response:', error);
-          }
-        }, 1000);
+    if (!isNetwork) {
+      // Inference mode - use Waku
+      const success = await sendMessage(inputValue);
+      if (success) {
+        setInputValue('');
       }
+    } else {
+      // Operator mode - use existing mock functionality
+      try {
+        if (!currentSession) {
+          const newSession = await createChatSession(inputValue);
+          onSessionCreate(newSession);
 
-      // Clear input
-      setInputValue('');
-    } catch (error) {
-      console.error('Error sending message:', error);
+          setTimeout(async () => {
+            try {
+              const updatedSession = await addMessageToSession(
+                newSession.id,
+                "I'm here to help! What would you like to know?",
+                'assistant'
+              );
+              onSessionCreate(updatedSession);
+            } catch (error) {
+              console.error('Error sending assistant response:', error);
+            }
+          }, 1000);
+        } else {
+          // Add message to existing session
+          const updatedSession = await addMessageToSession(currentSession.id, inputValue, 'user');
+          onSessionCreate(updatedSession);
+
+          // Add mock assistant response after a delay
+          setTimeout(async () => {
+            try {
+              const responseSession = await addMessageToSession(
+                updatedSession.id,
+                "I understand your message. How can I assist you further?",
+                'assistant'
+              );
+              onSessionCreate(responseSession);
+            } catch (error) {
+              console.error('Error sending assistant response:', error);
+            }
+          }, 1000);
+        }
+        setInputValue('');
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
     }
   };
 
@@ -209,8 +220,16 @@ export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, on
                 exit={{ opacity: 0 }}
               >
                 <div className="min-h-full flex flex-col justify-end px-8 py-6 pb-32">
-                  {currentSession.messages.map(message => (
-                    <ChatMessage key={message.id} message={message} />
+                  {!isNetwork && messages.map((message, index) => (
+                    <ChatMessage
+                      key={`${message.timestamp}-${index}`}
+                      message={{
+                        id: message.timestamp.toString(),
+                        content: atob(message.payload),
+                        role: message.isResponse ? 'assistant' : 'user',
+                        timestamp: message.timestamp
+                      }}
+                    />
                   ))}
                 </div>
               </motion.div>

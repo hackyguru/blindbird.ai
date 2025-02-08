@@ -80,6 +80,7 @@
     "@tanstack/react-router": "^1.99.0",
     "@tanstack/router-devtools": "^1.99.0",
     "@vitejs/plugin-react": "^4.3.4",
+    "axios": "^1.7.9",
     "babel-plugin-react-compiler": "^19.0.0-beta-27714ef-20250124",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

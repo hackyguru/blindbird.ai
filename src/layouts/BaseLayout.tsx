@@ -94,7 +94,7 @@ const LogoSection = () => {
       variants={itemVariants}
     >
       <img 
-        src={theme === 'dark' ? '/images/blindbird-black.png' : '/images/blindbird-white.png'} 
+        src={theme === 'dark' ? '/images/blindbird-white.png' : '/images/blindbird-black.png'} 
         alt="WakuAI" 
         className="w-10 h-10" 
       />
@@ -613,7 +613,11 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
     switch (activeRoute) {
       // Inference Mode Screens
       case 'new-chat':
-        return <NewChatScreen currentSession={activeSession} onSessionCreate={handleSessionSelect} />;
+        return <NewChatScreen 
+          currentSession={activeSession} 
+          onSessionCreate={handleSessionSelect}
+          isNetwork={isNetwork}
+        />;
       case 'new-agent':
         return <NewAgentScreen />;
       case 'browse-agents':
@@ -628,7 +632,11 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
         return <NodeStatusScreen isRunning={isRunning} />;
       
       default:
-        return <NewChatScreen currentSession={activeSession} onSessionCreate={handleSessionSelect} />;
+        return <NewChatScreen 
+          currentSession={activeSession} 
+          onSessionCreate={handleSessionSelect}
+          isNetwork={isNetwork}
+        />;
     }
   };
 

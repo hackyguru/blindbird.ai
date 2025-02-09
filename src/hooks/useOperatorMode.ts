@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { initializeHE } from '@/utils/encryption';
 
 const NWAKU_URL = 'http://127.0.0.1:8645';
 const CLIENT_TOPIC = '/waku-chat/1/client-message/proto';
@@ -13,6 +14,20 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
     timestamp: number;
     status: 'received' | 'processing' | 'responded';
   }>>([]);
+  const [encryption, setEncryption] = useState<any>(null);
+
+  // Initialize encryption
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const encryptionUtils = await initializeHE();
+        setEncryption(encryptionUtils);
+      } catch (error) {
+        console.error('Error initializing encryption:', error);
+      }
+    };
+    void init();
+  }, []);
 
   // Subscribe to client topic
   const subscribeToClientTopic = async () => {
@@ -38,12 +53,26 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
   // Process message with Ollama
   const processWithOllama = async (message: string): Promise<string> => {
     try {
-      const response = await axios.post(OLLAMA_URL, {
+      const parsedMessage = JSON.parse(message);
+      
+      // If message contains encrypted data, process it
+      if (parsedMessage.metadata?.isHomomorphic && encryption) {
+        try {
+          const encryptedValue = parsedMessage.metadata.encryptedValue;
+          // Perform homomorphic operation (square in this case)
+          const processedValue = await encryption.evaluateMessage(encryptedValue);
+          return `Processed encrypted value. Original message: ${parsedMessage.message}`;
+        } catch (error) {
+          console.error('Homomorphic processing error:', error);
+        }
+      }
+
+      // Fall back to regular Ollama processing
+      return await axios.post(OLLAMA_URL, {
         model: 'dolphin-llama3',
-        prompt: message,
+        prompt: parsedMessage.message,
         stream: false
       });
-      return response.data.response;
     } catch (error) {
       console.error('Error processing with Ollama:', error);
       return 'Sorry, I encountered an error processing your request.';
@@ -89,17 +118,17 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
       
       if (response.data && response.data.length > 0) {
         for (const msg of response.data) {
-          const decodedMessage = atob(msg.payload);
+          const decodedMessage = JSON.parse(atob(msg.payload));
           
           // Add to received messages if not already present
           setReceivedMessages(prev => {
             if (prev.some(m => m.timestamp === msg.timestamp)) return prev;
             
             return [...prev, {
-              content: decodedMessage,
+              content: decodedMessage.message, // Extract just the message content
               timestamp: msg.timestamp,
               status: 'received'
-            }].slice(-10); // Keep last 10 messages
+            }].slice(-10);
           });
 
           // Process with Ollama and update status

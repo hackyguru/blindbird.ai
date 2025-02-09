@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { initializeHE } from '@/utils/encryption';
 
 const NWAKU_URL = 'http://127.0.0.1:8645';
 const CLIENT_TOPIC = '/waku-chat/1/client-message/proto';
@@ -14,6 +15,20 @@ interface WakuMessage {
 
 export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => {
   const [messages, setMessages] = useState<WakuMessage[]>([]);
+  const [encryption, setEncryption] = useState<any>(null);
+
+  // Initialize encryption on mount
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const encryptionUtils = await initializeHE();
+        setEncryption(encryptionUtils);
+      } catch (error) {
+        console.error('Error initializing encryption:', error);
+      }
+    };
+    void init();
+  }, []);
 
   // Subscribe to response topic
   const subscribeToResponseTopic = async () => {
@@ -72,7 +87,29 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
     if (!message.trim() || !isNodeActive) return;
 
     try {
-      const encodedMessage = btoa(message);
+      // Extract any numbers from message for homomorphic encryption
+      const numbers = message.match(/\d+/);
+      const payload: EncryptedPayload = {
+        message,
+        metadata: {
+          isHomomorphic: false
+        }
+      };
+
+      // If we have numbers and encryption is initialized, encrypt them
+      if (numbers && encryption) {
+        try {
+          const encryptedValue = await encryption.encryptMessage(numbers[0]);
+          payload.metadata = {
+            encryptedValue: encryptedValue,
+            isHomomorphic: true
+          };
+        } catch (error) {
+          console.error('Encryption error:', error);
+        }
+      }
+
+      const encodedMessage = btoa(JSON.stringify(payload));
       await axios.post(
         `${NWAKU_URL}/relay/v1/auto/messages`,
         {
@@ -92,7 +129,8 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
         payload: encodedMessage,
         timestamp: Date.now(),
         contentTopic: CLIENT_TOPIC,
-        isResponse: false
+        isResponse: false,
+        displayContent: payload.message // Add display content
       }]);
       
       return true;

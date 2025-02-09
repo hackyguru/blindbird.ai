@@ -36,32 +36,40 @@ initStore().then(() => {
 });
 
 function createWindow() {
-  const preload = path.join(__dirname, "preload.js");
   const mainWindow = new BrowserWindow({
-    width: 1280,
+    width: 1200,
     height: 800,
-    minWidth: 900,
-    minHeight: 600,
-    center: true,
-    title: "WakuAI",
-    backgroundColor: '#ffffff',
     webPreferences: {
-      devTools: inDevelopment,
+      nodeIntegration: true,
       contextIsolation: true,
-      nodeIntegration: false,
-      nodeIntegrationInSubFrames: false,
-      preload: preload,
-    },
-    titleBarStyle: "hiddenInset",
+      webSecurity: true,
+      preload: path.join(__dirname, 'preload.js')
+    }
   });
   registerListeners(mainWindow);
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  // Add comprehensive CSP headers
+  mainWindow.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [
+          "default-src 'self'; " +
+          "script-src 'self' 'unsafe-eval' 'unsafe-inline'; " +
+          "style-src 'self' 'unsafe-inline'; " +
+          "connect-src 'self' http: https: ws: wss:; " +
+          "img-src 'self' data: https:; " +
+          "worker-src blob: 'self';"
+        ]
+      }
+    });
+  });
+
+  if (process.env.NODE_ENV === 'development') {
+    mainWindow.loadURL('http://localhost:5173');
+    mainWindow.webContents.openDevTools();
   } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 }
 

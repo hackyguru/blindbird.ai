@@ -280,8 +280,8 @@ const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSession
                   <SelectContent className="bg-white/80 dark:bg-neutral-900/80 border-white/20 dark:border-neutral-800/50 backdrop-blur-xl rounded-xl">
                     <SelectGroup>
                       <SelectLabel className="text-gray-500 dark:text-neutral-400">OpenAI Models</SelectLabel>
-                      <SelectItem value="gpt-4" className="text-gray-800 dark:text-neutral-200 focus:bg-gray-100/50 dark:focus:bg-neutral-800/50">GPT-4</SelectItem>
-                      <SelectItem value="gpt-3.5-turbo" className="text-gray-800 dark:text-neutral-200 focus:bg-gray-100/50 dark:focus:bg-neutral-800/50">GPT-3.5 Turbo</SelectItem>
+                      <SelectItem value="Dolphin-Llama" className="text-gray-800 dark:text-neutral-200 focus:bg-gray-100/50 dark:focus:bg-neutral-800/50">GPT-4</SelectItem>
+                      <SelectItem value="Llama" className="text-gray-800 dark:text-neutral-200 focus:bg-gray-100/50 dark:focus:bg-neutral-800/50">GPT-3.5 Turbo</SelectItem>
                       <SelectSeparator className="bg-gray-200/50 dark:bg-neutral-800/50" />
                       <SelectLabel className="text-gray-500 dark:text-neutral-400">Anthropic Models</SelectLabel>
                       <SelectItem value="claude-3-opus" className="text-gray-800 dark:text-neutral-200 focus:bg-gray-100/50 dark:focus:bg-neutral-800/50">Claude 3 Opus</SelectItem>

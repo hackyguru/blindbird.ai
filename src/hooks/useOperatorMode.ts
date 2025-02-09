@@ -1,18 +1,38 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { encryptionService } from '@/services/encryption';
 
 const NWAKU_URL = 'http://127.0.0.1:8645';
 const CLIENT_TOPIC = '/waku-chat/1/client-message/proto';
 const RESPONSE_TOPIC = '/waku-chat/1/server-response/proto';
 const OLLAMA_URL = 'http://localhost:11434/api/generate';
 
+interface Message {
+  content: string;
+  timestamp: number;
+  status: 'received' | 'processing' | 'responded';
+}
+
 export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [receivedMessages, setReceivedMessages] = useState<Array<{
-    content: string;
-    timestamp: number;
-    status: 'received' | 'processing' | 'responded';
-  }>>([]);
+  const [receivedMessages, setReceivedMessages] = useState<Message[]>([]);
+  const [isEncryptionReady, setIsEncryptionReady] = useState(false);
+
+  // Initialize encryption on mount
+  useEffect(() => {
+    const initializeEncryption = async () => {
+      try {
+        await encryptionService.initialize();
+        setIsEncryptionReady(true);
+      } catch (error) {
+        console.error('Failed to initialize encryption:', error);
+      }
+    };
+
+    if (isRunning) {
+      void initializeEncryption();
+    }
+  }, [isRunning]);
 
   // Subscribe to client topic
   const subscribeToClientTopic = async () => {
@@ -36,28 +56,33 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
   };
 
   // Process message with Ollama
-  const processWithOllama = async (message: string): Promise<string> => {
+  const processWithOllama = async (encryptedPrompt: string): Promise<string> => {
     try {
+      // Evaluate the encrypted prompt (this maintains FE security)
+      const evaluatedPrompt = await encryptionService.evaluatePrompt(encryptedPrompt);
+      
+      // Send to Ollama
       const response = await axios.post(OLLAMA_URL, {
         model: 'dolphin-llama3',
-        prompt: message,
+        prompt: evaluatedPrompt,
         stream: false
       });
+
+      // Return encrypted response
       return response.data.response;
     } catch (error) {
       console.error('Error processing with Ollama:', error);
-      return 'Sorry, I encountered an error processing your request.';
+      return 'Error processing your request.';
     }
   };
 
   // Send response back through Waku
   const sendResponse = async (response: string) => {
     try {
-      const encodedMessage = btoa(response);
       await axios.post(
         `${NWAKU_URL}/relay/v1/auto/messages`,
         {
-          payload: encodedMessage,
+          payload: response,
           contentTopic: RESPONSE_TOPIC,
           timestamp: Date.now()
         },
@@ -74,7 +99,7 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
 
   // Fetch and process messages
   const fetchAndProcessMessages = async () => {
-    if (!isNodeActive || !isRunning || !isSubscribed) return;
+    if (!isNodeActive || !isRunning || !isSubscribed || !isEncryptionReady) return;
 
     try {
       const encodedTopic = encodeURIComponent(CLIENT_TOPIC);
@@ -89,17 +114,17 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
       
       if (response.data && response.data.length > 0) {
         for (const msg of response.data) {
-          const decodedMessage = atob(msg.payload);
-          
           // Add to received messages if not already present
           setReceivedMessages(prev => {
             if (prev.some(m => m.timestamp === msg.timestamp)) return prev;
             
-            return [...prev, {
-              content: decodedMessage,
+            const newMessage: Message = {
+              content: '[Encrypted Prompt]', // We don't show the actual content
               timestamp: msg.timestamp,
-              status: 'received'
-            }].slice(-10); // Keep last 10 messages
+              status: 'received' as const
+            };
+            
+            return [...prev, newMessage].slice(-10); // Keep last 10 messages
           });
 
           // Process with Ollama and update status
@@ -107,7 +132,7 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
             prev.map(m => m.timestamp === msg.timestamp ? {...m, status: 'processing'} : m)
           );
           
-          const ollamaResponse = await processWithOllama(decodedMessage);
+          const ollamaResponse = await processWithOllama(msg.payload);
           await sendResponse(ollamaResponse);
           
           // Update status after processing
@@ -123,23 +148,24 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
 
   // Subscribe/unsubscribe based on running state
   useEffect(() => {
-    if (isNodeActive && isRunning && !isSubscribed) {
+    if (isNodeActive && isRunning && !isSubscribed && isEncryptionReady) {
       void subscribeToClientTopic();
     } else if (!isRunning) {
       setIsSubscribed(false);
     }
-  }, [isNodeActive, isRunning]);
+  }, [isNodeActive, isRunning, isEncryptionReady]);
 
   // Poll for messages when running
   useEffect(() => {
-    if (!isRunning) return;
+    if (!isRunning || !isEncryptionReady) return;
 
     const interval = setInterval(fetchAndProcessMessages, 1000);
     return () => clearInterval(interval);
-  }, [isRunning, isNodeActive, isSubscribed]);
+  }, [isRunning, isNodeActive, isSubscribed, isEncryptionReady]);
 
   return {
     isSubscribed,
-    receivedMessages
+    receivedMessages,
+    isEncryptionReady
   };
 }; 

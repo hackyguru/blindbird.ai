@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useNodeStatus } from '@/hooks/useNodeStatus';
 import { useWakuVersion } from '@/hooks/useWakuVersion';
+import { Toaster } from "@/components/ui/toaster"
 
 // Animation variants
 const sidebarVariants = {
@@ -1022,6 +1023,7 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
           </div>
         </div>
       </div>
+      <Toaster />
     </div>
   );
 }

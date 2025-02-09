@@ -31,6 +31,7 @@ import { useOperatorMode } from '@/hooks/useOperatorMode';
 import { cn } from '@/lib/utils';
 import { Switch } from "@/components/ui/switch";
 import { store } from '@/lib/store';
+import { toast } from "@/components/ui/use-toast";
 
 const container = {
   hidden: { opacity: 0 },
@@ -69,7 +70,7 @@ const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSession
   const [selectedModel, setSelectedModel] = useState('gpt-4');
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const isNodeActive = useNodeStatus();
-  const { messages, sendMessage, clearMessages } = useWakuChat(isNodeActive, !isNetwork);
+  const { messages, sendMessage, clearMessages, isEncryptionReady } = useWakuChat(isNodeActive, !isNetwork);
 
   // Clear messages when switching sessions or creating new chat
   useEffect(() => {
@@ -84,7 +85,7 @@ const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSession
         const newMessages = messages.slice(existingMessageCount);
         
         for (const msg of newMessages) {
-          const content = atob(msg.payload);
+          const content = msg.payload; // Already decrypted in useWakuChat
           await addMessageToSession(
             currentSession.id,
             content,
@@ -107,6 +108,16 @@ const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSession
     if (!inputValue.trim()) return;
 
     if (!isNetwork) {
+      if (!isEncryptionReady) {
+        // Show encryption not ready message
+        toast({
+          title: "Encryption Not Ready",
+          description: "Please wait while encryption is being initialized...",
+          variant: "destructive"
+        });
+        return;
+      }
+
       // Inference mode - create session first if needed
       if (!currentSession) {
         const newSession = await createChatSession(inputValue);
@@ -116,6 +127,13 @@ const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSession
       const success = await sendMessage(inputValue);
       if (success) {
         setInputValue('');
+      } else {
+        // Show error message
+        toast({
+          title: "Error",
+          description: "Failed to send message. Please try again.",
+          variant: "destructive"
+        });
       }
     } else {
       // Operator mode - use existing mock functionality

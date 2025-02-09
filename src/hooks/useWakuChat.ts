@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useState, useEffect } from 'react';
+import { encryptionService } from '@/services/encryption';
 
 const NWAKU_URL = 'http://127.0.0.1:8645';
 const CLIENT_TOPIC = '/waku-chat/1/client-message/proto';
@@ -14,6 +15,23 @@ interface WakuMessage {
 
 export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => {
   const [messages, setMessages] = useState<WakuMessage[]>([]);
+  const [isEncryptionReady, setIsEncryptionReady] = useState(false);
+
+  // Initialize encryption on mount
+  useEffect(() => {
+    const initializeEncryption = async () => {
+      try {
+        await encryptionService.initialize();
+        setIsEncryptionReady(true);
+      } catch (error) {
+        console.error('Failed to initialize encryption:', error);
+      }
+    };
+
+    if (isInferenceMode) {
+      void initializeEncryption();
+    }
+  }, [isInferenceMode]);
 
   // Subscribe to response topic
   const subscribeToResponseTopic = async () => {
@@ -36,7 +54,7 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
 
   // Fetch responses
   const fetchResponses = async () => {
-    if (!isNodeActive) return;
+    if (!isNodeActive || !isEncryptionReady) return;
 
     try {
       const encodedTopic = encodeURIComponent(RESPONSE_TOPIC);
@@ -50,17 +68,32 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
       );
       
       if (response.data && response.data.length > 0) {
-        setMessages(prevMessages => {
-          const newMessages = response.data.filter(
-            (newMsg: WakuMessage) => !prevMessages.some(
-              prevMsg => prevMsg.timestamp === newMsg.timestamp
+        const newMessages = await Promise.all(
+          response.data
+            .filter((newMsg: WakuMessage) => 
+              !messages.some(prevMsg => prevMsg.timestamp === newMsg.timestamp)
             )
-          ).map((msg: WakuMessage) => ({
-            ...msg,
-            isResponse: true
-          }));
-          return [...prevMessages, ...newMessages];
-        });
+            .map(async (msg: WakuMessage) => {
+              try {
+                // Decrypt the response
+                const decryptedPayload = await encryptionService.decryptResponse(msg.payload);
+                return {
+                  ...msg,
+                  payload: decryptedPayload,
+                  isResponse: true
+                };
+              } catch (error) {
+                console.error('Error decrypting response:', error);
+                return null;
+              }
+            })
+        );
+
+        // Filter out failed decryptions and add to messages
+        const validMessages = newMessages.filter((msg): msg is WakuMessage => msg !== null);
+        if (validMessages.length > 0) {
+          setMessages(prev => [...prev, ...validMessages]);
+        }
       }
     } catch (error) {
       console.error('Error fetching responses:', error);
@@ -69,14 +102,16 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
 
   // Send message
   const sendMessage = async (message: string) => {
-    if (!message.trim() || !isNodeActive) return;
+    if (!message.trim() || !isNodeActive || !isEncryptionReady) return false;
 
     try {
-      const encodedMessage = btoa(message);
+      // Encrypt the message
+      const encryptedMessage = await encryptionService.encryptPrompt(message);
+
       await axios.post(
         `${NWAKU_URL}/relay/v1/auto/messages`,
         {
-          payload: encodedMessage,
+          payload: encryptedMessage,
           contentTopic: CLIENT_TOPIC,
           timestamp: Date.now()
         },
@@ -87,9 +122,9 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
         }
       );
       
-      // Add user message to the list
+      // Add user message to the list (store original message for display)
       setMessages(prev => [...prev, {
-        payload: encodedMessage,
+        payload: message, // Store unencrypted for display
         timestamp: Date.now(),
         contentTopic: CLIENT_TOPIC,
         isResponse: false
@@ -104,22 +139,23 @@ export const useWakuChat = (isNodeActive: boolean, isInferenceMode: boolean) => 
 
   // Subscribe to response topic when entering inference mode
   useEffect(() => {
-    if (isInferenceMode && isNodeActive) {
+    if (isInferenceMode && isNodeActive && isEncryptionReady) {
       subscribeToResponseTopic();
     }
-  }, [isInferenceMode, isNodeActive]);
+  }, [isInferenceMode, isNodeActive, isEncryptionReady]);
 
   // Poll for responses
   useEffect(() => {
-    if (!isInferenceMode || !isNodeActive) return;
+    if (!isInferenceMode || !isNodeActive || !isEncryptionReady) return;
 
     const interval = setInterval(fetchResponses, 1000);
     return () => clearInterval(interval);
-  }, [isInferenceMode, isNodeActive]);
+  }, [isInferenceMode, isNodeActive, isEncryptionReady]);
 
   return {
     messages,
     sendMessage,
-    clearMessages: () => setMessages([])
+    clearMessages: () => setMessages([]),
+    isEncryptionReady
   };
 }; 

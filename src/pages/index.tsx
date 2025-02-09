@@ -48,7 +48,7 @@ export default function HomePage() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.2 }}
             >
-              Hello, Guru
+              Hello, anon
             </motion.h1>
             <motion.p 
               className="text-[26px] leading-tight text-gray-600 dark:text-neutral-400"

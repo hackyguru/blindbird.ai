@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shuffle, Grid, FileText, Activity, Pause, Network, Play, Box } from 'lucide-react';
+import { Shuffle, Grid, FileText, Activity, Pause, Network, Play, Box, Bot } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -196,7 +196,7 @@ const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSession
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5, delay: 0.2 }}
                 >
-                  Hello, Guru
+                  Hello, anon
                 </motion.h1>
                 <motion.p 
                   className="text-[26px] leading-tight text-gray-600 dark:text-neutral-400"
@@ -405,18 +405,99 @@ const NewAgentScreen: React.FC = () => {
   );
 };
 
+const AgentCard: React.FC<{
+  name: string;
+  description: string;
+  gradient: string;
+  icon: React.ReactNode;
+}> = ({ name, description, gradient, icon }) => {
+  return (
+    <motion.div
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+      className={cn(
+        "group relative h-[200px] p-6 rounded-2xl border border-white/20 dark:border-neutral-800/50",
+        "bg-gradient-to-br backdrop-blur-xl shadow-sm cursor-pointer",
+        "transition-all duration-300 ease-in-out flex flex-col",
+        gradient
+      )}
+      tabIndex={0}
+      role="button"
+      aria-label={`Select ${name} agent`}
+    >
+      <div className="flex items-start justify-between">
+        <div className="p-2 rounded-xl bg-white/80 dark:bg-neutral-900/80">
+          {icon}
+        </div>
+      </div>
+      <div className="mt-auto">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+          {name}
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">
+          {description}
+        </p>
+      </div>
+    </motion.div>
+  );
+};
+
 const BrowseAgentsScreen: React.FC = () => {
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1
+      }
+    }
+  };
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 }
+  };
+
+  const agents = [
+    {
+      name: "Arbitrum agent",
+      description: "Specialized agent for Arbitrum blockchain operations and monitoring",
+      gradient: "from-blue-400/10 to-purple-400/10 dark:from-blue-500/10 dark:to-purple-500/10",
+      icon: <Bot className="w-5 h-5 text-blue-500" />
+    },
+    {
+      name: "Binance agent",
+      description: "Expert agent for Binance trading and market analysis",
+      gradient: "from-yellow-400/10 to-orange-400/10 dark:from-yellow-500/10 dark:to-orange-500/10",
+      icon: <Bot className="w-5 h-5 text-yellow-500" />
+    },
+    {
+      name: "Flare agent",
+      description: "Dedicated agent for Flare Network interactions and monitoring",
+      gradient: "from-green-400/10 to-emerald-400/10 dark:from-green-500/10 dark:to-emerald-500/10",
+      icon: <Bot className="w-5 h-5 text-green-500" />
+    }
+  ];
+
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Browse Agents</h1>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <h2 className="text-xl font-medium">Discover Available Agents</h2>
-          <p className="text-gray-600 dark:text-gray-400 max-w-md">
-            Explore and connect with various AI agents available on the network.
-          </p>
-        </div>
-      </div>
+      <p className="text-gray-600 dark:text-gray-400 mb-8">
+        Explore and connect with various AI agents available on the network.
+      </p>
+      
+      <motion.div 
+        className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-fr"
+        variants={container}
+        initial="hidden"
+        animate="show"
+      >
+        {agents.map((agent) => (
+          <motion.div key={agent.name} variants={item} className="h-full">
+            <AgentCard {...agent} />
+          </motion.div>
+        ))}
+      </motion.div>
     </div>
   );
 };
@@ -519,7 +600,7 @@ const NodeStatusScreen: React.FC<{ isRunning: boolean; onToggle?: () => void }> 
                     <div key={msg.timestamp} className="flex items-center justify-between bg-white/40 dark:bg-neutral-800/40 rounded-xl p-3">
                       <div className="flex-1 mr-4">
                         <p className="text-sm text-gray-800 dark:text-neutral-200">
-                          {msg.content}
+                          Anonymous prompt
                         </p>
                         <p className="text-xs text-gray-500 dark:text-neutral-400">
                           {new Date(msg.timestamp).toLocaleTimeString()}

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shuffle, Grid, FileText, Activity, Pause, Network, Play, MessageCircle } from 'lucide-react';
+import { Shuffle, Grid, FileText, Activity, Pause, Network, Play, Box } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -29,6 +29,8 @@ import axios from 'axios';
 import { useNodeStatus } from '@/hooks/useNodeStatus';
 import { useOperatorMode } from '@/hooks/useOperatorMode';
 import { cn } from '@/lib/utils';
+import { Switch } from "@/components/ui/switch";
+import { store } from '@/lib/store';
 
 const container = {
   hidden: { opacity: 0 },
@@ -61,7 +63,7 @@ interface NewChatScreenProps {
 }
 
 // Inference Mode Screens
-export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSessionCreate, isNetwork }) => {
+const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSessionCreate, isNetwork }) => {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4');
@@ -387,7 +389,7 @@ function FeatureCard({
   );
 }
 
-export const NewAgentScreen: React.FC = () => {
+const NewAgentScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">New Agent</h1>
@@ -403,7 +405,7 @@ export const NewAgentScreen: React.FC = () => {
   );
 };
 
-export const BrowseAgentsScreen: React.FC = () => {
+const BrowseAgentsScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Browse Agents</h1>
@@ -420,7 +422,7 @@ export const BrowseAgentsScreen: React.FC = () => {
 };
 
 // Operator Mode Screens
-export const ConfigurationScreen: React.FC = () => {
+const ConfigurationScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Configuration</h1>
@@ -436,7 +438,7 @@ export const ConfigurationScreen: React.FC = () => {
   );
 };
 
-export const ConnectionsScreen: React.FC = () => {
+const ConnectionsScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Connections</h1>
@@ -452,7 +454,7 @@ export const ConnectionsScreen: React.FC = () => {
   );
 };
 
-export const StatusScreen: React.FC = () => {
+const StatusScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Status</h1>
@@ -476,7 +478,10 @@ interface IncomingMessage {
 }
 
 // Update the NodeStatusScreen component
-export const NodeStatusScreen: React.FC<{ isRunning: boolean; onToggle: () => void }> = ({ isRunning, onToggle }) => {
+const NodeStatusScreen: React.FC<{ isRunning: boolean; onToggle?: () => void }> = ({ 
+  isRunning, 
+  onToggle = () => {} // Provide default empty function
+}) => {
   const isNodeActive = useNodeStatus();
   const { isSubscribed, receivedMessages } = useOperatorMode(isNodeActive, isRunning);
 
@@ -564,7 +569,7 @@ export const NodeStatusScreen: React.FC<{ isRunning: boolean; onToggle: () => vo
 };
 
 // Add this new component for the initial operator mode view
-export const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <div className="flex-1 flex items-center justify-center">
@@ -591,34 +596,90 @@ export const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onSta
   );
 };
 
-// Update the chat sessions sidebar section
-<div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-neutral-700 scrollbar-track-transparent hover:scrollbar-thumb-gray-400 dark:hover:scrollbar-thumb-neutral-600">
-  <motion.div
-    variants={container}
-    initial="hidden"
-    animate="show"
-    className="space-y-2 p-2"
-  >
-    {chatSessions.map((session) => (
-      <motion.div
-        key={session.id}
-        variants={item}
-        className="relative group"
-      >
-        <Button
-          variant="ghost"
-          onClick={() => handleSessionSelect(session)}
-          className={cn(
-            "w-full justify-start text-[13px] rounded-xl transition-all backdrop-blur-sm",
-            selectedSession?.id === session.id
-              ? "bg-gray-100/70 dark:bg-white/10 text-gray-800 dark:text-gray-100 shadow-sm"
-              : "text-gray-600 dark:text-gray-400 hover:bg-gray-100/50 dark:hover:bg-white/5 hover:text-gray-800 dark:hover:text-gray-300"
-          )}
-        >
-          <MessageCircle className="w-4 h-4 mr-2" />
-          {session.name || `Chat ${chatSessions.length - chatSessions.indexOf(session)}`}
-        </Button>
-      </motion.div>
-    ))}
-  </motion.div>
-</div> 
+interface OllamaModel {
+  name: string;
+  modified_at: string;
+  size: number;
+  details: {
+    parameter_size: string;
+    family: string;
+  };
+}
+
+interface ModelsResponse {
+  models: OllamaModel[];
+}
+
+const ModelsScreen: React.FC = () => {
+  const [models, setModels] = useState<OllamaModel[]>([]);
+
+  const fetchModels = async () => {
+    try {
+      const response = await axios.get('http://localhost:11434/api/tags');
+      const data = response.data as ModelsResponse;
+      setModels(data.models);
+    } catch (error) {
+      console.error('Error fetching models:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchModels();
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full p-6 rounded-3xl">
+      <div className="flex items-center mb-6">
+        <Box className="w-5 h-5 mr-2 text-gray-600 dark:text-neutral-400" />
+        <h2 className="text-xl font-medium text-gray-800 dark:text-neutral-200">Available Models</h2>
+      </div>
+      
+      <div className="space-y-4">
+        {models.map((model) => (
+          <div
+            key={model.name}
+            className="bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl rounded-2xl p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200">
+                  {model.name.split(':')[0]}
+                </h3>
+                <div className="mt-1 space-y-1">
+                  <p className="text-xs text-gray-500 dark:text-neutral-400">
+                    Family: {model.details.family} • Size: {model.details.parameter_size}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-400">
+                    Modified: {new Date(model.modified_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={true}
+                disabled={true}
+              />
+            </div>
+          </div>
+        ))}
+        
+        {models.length === 0 && (
+          <div className="text-center text-gray-500 dark:text-neutral-400 py-8">
+            No models found. Make sure Ollama is running and models are installed.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export {
+  NewChatScreen,
+  NewAgentScreen,
+  BrowseAgentsScreen,
+  ConfigurationScreen,
+  ConnectionsScreen,
+  StatusScreen,
+  NodeStatusScreen,
+  OperatorWelcomeScreen,
+  ModelsScreen
+}; 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Home, Users, History, Plus, Moon, Sun, RadioTower, Settings, Download, Network, MessageCircle, Info, Cog, Link2, Activity, Bot, FolderSearch, X, Play, Pause } from "lucide-react";
+import { Home, Users, History, Plus, Moon, Sun, RadioTower, Settings, Download, Network, MessageCircle, Info, Cog, Link2, Activity, Bot, FolderSearch, X, Play, Pause, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Route } from "@/types/routes";
-import { NewChatScreen, NewAgentScreen, BrowseAgentsScreen, ConfigurationScreen, ConnectionsScreen, StatusScreen, NodeStatusScreen, OperatorWelcomeScreen } from "@/screens";
+import { NewChatScreen, NewAgentScreen, BrowseAgentsScreen, ConfigurationScreen, ConnectionsScreen, StatusScreen, NodeStatusScreen, OperatorWelcomeScreen, ModelsScreen } from "@/screens";
 import { getChatSessions } from '@/utils/chatStorage';
 import { ChatSession } from '@/types/chat';
 import { cn } from "@/lib/utils";
@@ -343,27 +343,23 @@ const OperatorModeNav = ({
           animate={{ rotate: isRunning ? 0 : 0 }}
           className="mr-3 h-4 w-4"
         >
-          {isRunning ? (
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: 180 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            >
-              <Pause className="h-4 w-4" />
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ scale: 0, rotate: 180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: -180 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            >
-              <Play className="h-4 w-4" />
-            </motion.div>
-          )}
+          {isRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </motion.div>
-        {isRunning ? 'Running' : 'Start'}
+        {isRunning ? 'Stop Node' : 'Start Node'}
+      </Button>
+
+      <Button
+        variant="ghost"
+        className={cn(
+          "w-full justify-start text-[13px] rounded-xl",
+          activeRoute === 'models'
+            ? "bg-gray-100/50 dark:bg-neutral-800/50 text-gray-900 dark:text-neutral-50"
+            : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100/50 dark:hover:bg-neutral-800/50"
+        )}
+        onClick={() => setActiveRoute('models')}
+      >
+        <Box className="mr-3 h-4 w-4" />
+        Models
       </Button>
 
       {/* Options Section */}
@@ -380,14 +376,6 @@ const OperatorModeNav = ({
               icon={<Cog size={16} />} 
               label="Configuration" 
               route="configuration"
-              currentRoute={activeRoute}
-            />
-          </div>
-          <div onClick={() => setActiveRoute('connections')}>
-            <NavItem 
-              icon={<Link2 size={16} />} 
-              label="Connections" 
-              route="connections"
               currentRoute={activeRoute}
             />
           </div>
@@ -626,10 +614,13 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
       // Operator Mode Screens
       case 'configuration':
         return <ConfigurationScreen />;
-      case 'connections':
-        return <ConnectionsScreen />;
+      case 'models':
+        return <ModelsScreen />;
       case 'status':
-        return <NodeStatusScreen isRunning={isRunning} />;
+        return <NodeStatusScreen 
+          isRunning={isRunning} 
+          onToggle={() => setIsRunning(!isRunning)} 
+        />;
       
       default:
         return <NewChatScreen 

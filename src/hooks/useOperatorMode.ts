@@ -8,6 +8,11 @@ const OLLAMA_URL = 'http://localhost:11434/api/generate';
 
 export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
   const [isSubscribed, setIsSubscribed] = useState(false);
+  const [receivedMessages, setReceivedMessages] = useState<Array<{
+    content: string;
+    timestamp: number;
+    status: 'received' | 'processing' | 'responded';
+  }>>([]);
 
   // Subscribe to client topic
   const subscribeToClientTopic = async () => {
@@ -85,8 +90,30 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
       if (response.data && response.data.length > 0) {
         for (const msg of response.data) {
           const decodedMessage = atob(msg.payload);
+          
+          // Add to received messages if not already present
+          setReceivedMessages(prev => {
+            if (prev.some(m => m.timestamp === msg.timestamp)) return prev;
+            
+            return [...prev, {
+              content: decodedMessage,
+              timestamp: msg.timestamp,
+              status: 'received'
+            }].slice(-10); // Keep last 10 messages
+          });
+
+          // Process with Ollama and update status
+          setReceivedMessages(prev => 
+            prev.map(m => m.timestamp === msg.timestamp ? {...m, status: 'processing'} : m)
+          );
+          
           const ollamaResponse = await processWithOllama(decodedMessage);
           await sendResponse(ollamaResponse);
+          
+          // Update status after processing
+          setReceivedMessages(prev => 
+            prev.map(m => m.timestamp === msg.timestamp ? {...m, status: 'responded'} : m)
+          );
         }
       }
     } catch (error) {
@@ -112,6 +139,7 @@ export const useOperatorMode = (isNodeActive: boolean, isRunning: boolean) => {
   }, [isRunning, isNodeActive, isSubscribed]);
 
   return {
-    isSubscribed
+    isSubscribed,
+    receivedMessages
   };
 }; 

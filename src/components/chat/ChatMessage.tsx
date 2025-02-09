@@ -1,14 +1,18 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ChatMessage as ChatMessageType } from '@/types/chat';
 import { cn } from '@/lib/utils';
 
 interface ChatMessageProps {
-  message: ChatMessageType;
+  message: {
+    id: string;
+    content: string;
+    role: 'user' | 'assistant';
+    timestamp: number;
+  };
 }
 
 export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
-  const isUser = message.sender === 'user';
+  const isUser = message.role === 'user';
 
   return (
     <motion.div
@@ -21,20 +25,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({ message }) => {
     >
       <div
         className={cn(
-          "max-w-[80%] px-4 py-3 rounded-2xl backdrop-blur-xl",
+          "max-w-[80%] rounded-2xl px-4 py-2 text-sm",
           isUser
-            ? "bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 ml-12"
-            : "bg-white/20 dark:bg-neutral-800/40 border border-white/10 dark:border-neutral-700/50 mr-12"
+            ? "bg-blue-500 text-white ml-auto rounded-br-sm"
+            : "bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl text-gray-800 dark:text-neutral-200 mr-auto rounded-bl-sm"
         )}
       >
-        <p className={cn(
-          "text-sm",
-          isUser
-            ? "text-gray-800 dark:text-neutral-200"
-            : "text-gray-700 dark:text-neutral-300"
-        )}>
-          {message.content}
-        </p>
+        {message.content}
       </div>
     </motion.div>
   );

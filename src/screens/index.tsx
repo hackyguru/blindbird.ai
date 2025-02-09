@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Shuffle, Grid, FileText, Activity, Pause, Network, Play } from 'lucide-react';
+import { Shuffle, Grid, FileText, Activity, Pause, Network, Play, Box } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,6 +24,13 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { useWakuChat } from '@/hooks/useWakuChat';
+import axios from 'axios';
+import { useNodeStatus } from '@/hooks/useNodeStatus';
+import { useOperatorMode } from '@/hooks/useOperatorMode';
+import { cn } from '@/lib/utils';
+import { Switch } from "@/components/ui/switch";
+import { store } from '@/lib/store';
 
 const container = {
   hidden: { opacity: 0 },
@@ -52,68 +59,106 @@ const item = {
 interface NewChatScreenProps {
   currentSession: ChatSession | null;
   onSessionCreate: (session: ChatSession) => void;
+  isNetwork: boolean;
 }
 
 // Inference Mode Screens
-export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSessionCreate }) => {
+const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, onSessionCreate, isNetwork }) => {
   const [inputValue, setInputValue] = useState('');
   const [isFocused, setIsFocused] = useState(false);
   const [selectedModel, setSelectedModel] = useState('gpt-4');
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isNodeActive = useNodeStatus();
+  const { messages, sendMessage, clearMessages } = useWakuChat(isNodeActive, !isNetwork);
 
-  // Auto scroll to bottom when messages change
+  // Clear messages when switching sessions or creating new chat
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    clearMessages();
+  }, [currentSession?.id]);
+
+  // Handle Waku messages and store them in sessions
+  useEffect(() => {
+    if (!isNetwork && messages.length > 0 && currentSession) {
+      const handleWakuMessages = async () => {
+        const existingMessageCount = currentSession.messages.length;
+        const newMessages = messages.slice(existingMessageCount);
+        
+        for (const msg of newMessages) {
+          const content = atob(msg.payload);
+          await addMessageToSession(
+            currentSession.id,
+            content,
+            msg.isResponse ? 'assistant' : 'user'
+          );
+          const updatedSession = await getChatSessions().then(
+            sessions => sessions.find(s => s.id === currentSession.id)
+          );
+          if (updatedSession) {
+            onSessionCreate(updatedSession);
+          }
+        }
+      };
+
+      void handleWakuMessages();
     }
-  }, [currentSession?.messages]);
+  }, [messages, currentSession, isNetwork, onSessionCreate]);
 
   const handleSendMessage = async () => {
     if (!inputValue.trim()) return;
 
-    try {
+    if (!isNetwork) {
+      // Inference mode - create session first if needed
       if (!currentSession) {
-        // Create new session if none exists
         const newSession = await createChatSession(inputValue);
         onSessionCreate(newSession);
-
-        // Add mock assistant response after a delay
-        setTimeout(async () => {
-          try {
-            const updatedSession = await addMessageToSession(
-              newSession.id,
-              "I'm here to help! What would you like to know?",
-              'assistant'
-            );
-            onSessionCreate(updatedSession);
-          } catch (error) {
-            console.error('Error sending assistant response:', error);
-          }
-        }, 1000);
-      } else {
-        // Add message to existing session
-        const updatedSession = await addMessageToSession(currentSession.id, inputValue, 'user');
-        onSessionCreate(updatedSession);
-
-        // Add mock assistant response after a delay
-        setTimeout(async () => {
-          try {
-            const responseSession = await addMessageToSession(
-              updatedSession.id,
-              "I understand your message. How can I assist you further?",
-              'assistant'
-            );
-            onSessionCreate(responseSession);
-          } catch (error) {
-            console.error('Error sending assistant response:', error);
-          }
-        }, 1000);
       }
+      // Send message through Waku
+      const success = await sendMessage(inputValue);
+      if (success) {
+        setInputValue('');
+      }
+    } else {
+      // Operator mode - use existing mock functionality
+      try {
+        if (!currentSession) {
+          const newSession = await createChatSession(inputValue);
+          onSessionCreate(newSession);
 
-      // Clear input
-      setInputValue('');
-    } catch (error) {
-      console.error('Error sending message:', error);
+          setTimeout(async () => {
+            try {
+              const updatedSession = await addMessageToSession(
+                newSession.id,
+                "I'm here to help! What would you like to know?",
+                'assistant'
+              );
+              onSessionCreate(updatedSession);
+            } catch (error) {
+              console.error('Error sending assistant response:', error);
+            }
+          }, 1000);
+        } else {
+          // Add message to existing session
+          const updatedSession = await addMessageToSession(currentSession.id, inputValue, 'user');
+          onSessionCreate(updatedSession);
+
+          // Add mock assistant response after a delay
+          setTimeout(async () => {
+            try {
+              const responseSession = await addMessageToSession(
+                updatedSession.id,
+                "I understand your message. How can I assist you further?",
+                'assistant'
+              );
+              onSessionCreate(responseSession);
+            } catch (error) {
+              console.error('Error sending assistant response:', error);
+            }
+          }, 1000);
+        }
+        setInputValue('');
+      } catch (error) {
+        console.error('Error sending message:', error);
+      }
     }
   };
 
@@ -129,7 +174,7 @@ export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, on
       {/* Messages container */}
       <AnimatePresence mode="wait">
         {!currentSession ? (
-          // Welcome screen
+          // Welcome screen with "Hello, Guru"
           <motion.div 
             key="welcome"
             className="flex-1 overflow-auto rounded-3xl"
@@ -209,8 +254,16 @@ export const NewChatScreen: React.FC<NewChatScreenProps> = ({ currentSession, on
                 exit={{ opacity: 0 }}
               >
                 <div className="min-h-full flex flex-col justify-end px-8 py-6 pb-32">
-                  {currentSession.messages.map(message => (
-                    <ChatMessage key={message.id} message={message} />
+                  {currentSession.messages.map((message, index) => (
+                    <ChatMessage
+                      key={message.id}
+                      message={{
+                        id: message.id,
+                        content: message.content,
+                        role: message.sender,
+                        timestamp: message.timestamp
+                      }}
+                    />
                   ))}
                 </div>
               </motion.div>
@@ -336,7 +389,7 @@ function FeatureCard({
   );
 }
 
-export const NewAgentScreen: React.FC = () => {
+const NewAgentScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">New Agent</h1>
@@ -352,7 +405,7 @@ export const NewAgentScreen: React.FC = () => {
   );
 };
 
-export const BrowseAgentsScreen: React.FC = () => {
+const BrowseAgentsScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Browse Agents</h1>
@@ -369,7 +422,7 @@ export const BrowseAgentsScreen: React.FC = () => {
 };
 
 // Operator Mode Screens
-export const ConfigurationScreen: React.FC = () => {
+const ConfigurationScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Configuration</h1>
@@ -385,7 +438,7 @@ export const ConfigurationScreen: React.FC = () => {
   );
 };
 
-export const ConnectionsScreen: React.FC = () => {
+const ConnectionsScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Connections</h1>
@@ -401,7 +454,7 @@ export const ConnectionsScreen: React.FC = () => {
   );
 };
 
-export const StatusScreen: React.FC = () => {
+const StatusScreen: React.FC = () => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <h1 className="text-2xl font-semibold mb-4">Status</h1>
@@ -417,59 +470,106 @@ export const StatusScreen: React.FC = () => {
   );
 };
 
-// Add this new component after other screen components
-export const NodeStatusScreen: React.FC<{ isRunning: boolean }> = ({ isRunning }) => {
+// Add this interface at the top with other imports
+interface IncomingMessage {
+  timestamp: number;
+  content: string;
+  status: 'received' | 'processed' | 'responded';
+}
+
+// Update the NodeStatusScreen component
+const NodeStatusScreen: React.FC<{ isRunning: boolean; onToggle?: () => void }> = ({ 
+  isRunning, 
+  onToggle = () => {} // Provide default empty function
+}) => {
+  const isNodeActive = useNodeStatus();
+  const { isSubscribed, receivedMessages } = useOperatorMode(isNodeActive, isRunning);
+
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
-      <h1 className="text-2xl font-semibold mb-4">Node Status</h1>
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center space-y-6">
-          {isRunning ? (
-            <>
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-400/10 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 mb-4">
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-                >
-                  <Activity className="w-10 h-10" />
-                </motion.div>
-              </div>
-              <h2 className="text-2xl font-medium text-emerald-600 dark:text-emerald-400">Node is Running</h2>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md">
-                Your node is actively participating in the network, processing requests and contributing to the decentralized infrastructure.
-              </p>
-              <div className="flex flex-col items-center space-y-4 mt-8">
-                <div className="grid grid-cols-2 gap-4 w-full max-w-md">
-                  <div className="flex flex-col items-center p-4 bg-white/40 dark:bg-neutral-900/40 rounded-xl backdrop-blur-xl border border-white/20 dark:border-neutral-800/50">
-                    <span className="text-sm text-gray-500 dark:text-neutral-400">Active Time</span>
-                    <span className="text-2xl font-medium text-gray-800 dark:text-neutral-200 mt-1">2h 34m</span>
-                  </div>
-                  <div className="flex flex-col items-center p-4 bg-white/40 dark:bg-neutral-900/40 rounded-xl backdrop-blur-xl border border-white/20 dark:border-neutral-800/50">
-                    <span className="text-sm text-gray-500 dark:text-neutral-400">Requests Processed</span>
-                    <span className="text-2xl font-medium text-gray-800 dark:text-neutral-200 mt-1">128</span>
-                  </div>
+      <div className="flex-1 flex flex-col">
+        {isRunning ? (
+          <>
+            <div className="grid grid-cols-2 gap-4 mb-6">
+              <div className="bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl rounded-2xl p-4">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200 mb-2">Node Status</h3>
+                <div className={cn(
+                  "text-sm px-2 py-1 rounded-full w-fit",
+                  isNodeActive ? "bg-green-500/20 text-green-500" : "bg-red-500/20 text-red-500"
+                )}>
+                  {isNodeActive ? 'Connected' : 'Disconnected'}
                 </div>
               </div>
-            </>
-          ) : (
-            <>
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gray-100 dark:bg-neutral-800 text-gray-400 dark:text-neutral-500 mb-4">
-                <Pause className="w-10 h-10" />
+              <div className="bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl rounded-2xl p-4">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200 mb-2">Subscription Status</h3>
+                <div className={cn(
+                  "text-sm px-2 py-1 rounded-full w-fit",
+                  isSubscribed ? "bg-green-500/20 text-green-500" : "bg-yellow-500/20 text-yellow-500"
+                )}>
+                  {isSubscribed ? 'Subscribed' : 'Not Subscribed'}
+                </div>
               </div>
-              <h2 className="text-2xl font-medium text-gray-800 dark:text-neutral-200">Node is Paused</h2>
-              <p className="text-gray-600 dark:text-gray-400 max-w-md">
-                Your node is currently inactive. Start the node to begin processing requests and earning rewards.
-              </p>
-            </>
-          )}
-        </div>
+            </div>
+            
+            <div className="flex-1 bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl rounded-2xl p-4">
+              <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200 mb-4">Incoming Messages</h3>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {receivedMessages.length > 0 ? (
+                  receivedMessages.map((msg, index) => (
+                    <div key={msg.timestamp} className="flex items-center justify-between bg-white/40 dark:bg-neutral-800/40 rounded-xl p-3">
+                      <div className="flex-1 mr-4">
+                        <p className="text-sm text-gray-800 dark:text-neutral-200">
+                          {msg.content}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-neutral-400">
+                          {new Date(msg.timestamp).toLocaleTimeString()}
+                        </p>
+                      </div>
+                      <span className={cn(
+                        "text-xs px-2 py-1 rounded-full",
+                        msg.status === 'received' ? "bg-blue-500/20 text-blue-500" :
+                        msg.status === 'processing' ? "bg-yellow-500/20 text-yellow-500" :
+                        "bg-green-500/20 text-green-500"
+                      )}>
+                        {msg.status}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-500 dark:text-neutral-400 py-4">
+                    Waiting for messages...
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="text-center space-y-6">
+            <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl mb-4">
+              <Pause className="w-10 h-10 text-gray-600 dark:text-neutral-400" />
+            </div>
+            <h2 className="text-2xl font-medium text-gray-800 dark:text-neutral-200">Node is Paused</h2>
+            <p className="text-gray-600 dark:text-gray-400 max-w-md mx-auto">
+              Start the node to begin processing messages and contributing to the network.
+            </p>
+            <div className="pt-4">
+              <Button
+                onClick={onToggle}
+                className="h-12 px-6 rounded-xl bg-emerald-500/80 hover:bg-emerald-500 text-white border-0 shadow-lg shadow-emerald-500/20"
+              >
+                <Play className="w-5 h-5 mr-2" />
+                Start Node
+              </Button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
 
 // Add this new component for the initial operator mode view
-export const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onStart }) => {
+const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   return (
     <div className="flex flex-col h-full p-6 rounded-3xl">
       <div className="flex-1 flex items-center justify-center">
@@ -494,4 +594,92 @@ export const OperatorWelcomeScreen: React.FC<{ onStart: () => void }> = ({ onSta
       </div>
     </div>
   );
+};
+
+interface OllamaModel {
+  name: string;
+  modified_at: string;
+  size: number;
+  details: {
+    parameter_size: string;
+    family: string;
+  };
+}
+
+interface ModelsResponse {
+  models: OllamaModel[];
+}
+
+const ModelsScreen: React.FC = () => {
+  const [models, setModels] = useState<OllamaModel[]>([]);
+
+  const fetchModels = async () => {
+    try {
+      const response = await axios.get('http://localhost:11434/api/tags');
+      const data = response.data as ModelsResponse;
+      setModels(data.models);
+    } catch (error) {
+      console.error('Error fetching models:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchModels();
+  }, []);
+
+  return (
+    <div className="flex flex-col h-full p-6 rounded-3xl">
+      <div className="flex items-center mb-6">
+        <Box className="w-5 h-5 mr-2 text-gray-600 dark:text-neutral-400" />
+        <h2 className="text-xl font-medium text-gray-800 dark:text-neutral-200">Available Models</h2>
+      </div>
+      
+      <div className="space-y-4">
+        {models.map((model) => (
+          <div
+            key={model.name}
+            className="bg-white/40 dark:bg-neutral-900/40 border border-white/20 dark:border-neutral-800/50 backdrop-blur-xl rounded-2xl p-4"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200">
+                  {model.name.split(':')[0]}
+                </h3>
+                <div className="mt-1 space-y-1">
+                  <p className="text-xs text-gray-500 dark:text-neutral-400">
+                    Family: {model.details.family} • Size: {model.details.parameter_size}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-neutral-400">
+                    Modified: {new Date(model.modified_at).toLocaleDateString()}
+                  </p>
+                </div>
+              </div>
+              <Switch
+                checked={true}
+                disabled={true}
+              />
+            </div>
+          </div>
+        ))}
+        
+        {models.length === 0 && (
+          <div className="text-center text-gray-500 dark:text-neutral-400 py-8">
+            No models found. Make sure Ollama is running and models are installed.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export {
+  NewChatScreen,
+  NewAgentScreen,
+  BrowseAgentsScreen,
+  ConfigurationScreen,
+  ConnectionsScreen,
+  StatusScreen,
+  NodeStatusScreen,
+  OperatorWelcomeScreen,
+  ModelsScreen
 }; 

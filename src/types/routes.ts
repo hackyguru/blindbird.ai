@@ -5,4 +5,4 @@ export type InferenceRoute = 'new-chat' | 'new-agent' | 'browse-agents';
 export type OperatorRoute = 'configuration' | 'connections' | 'status';
 
 // Combined Route Type
-export type Route = InferenceRoute | OperatorRoute; 
+export type Route = 'chat' | 'new-chat' | 'new-agent' | 'browse-agents' | 'configuration' | 'connections' | 'status' | 'models'; 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from "react";
-import { Home, Users, History, Plus, Moon, Sun, RadioTower, Settings, Download, Network, MessageCircle, Info, Cog, Link2, Activity, Bot, FolderSearch, X, Play, Pause } from "lucide-react";
+import { Home, Users, History, Plus, Moon, Sun, RadioTower, Settings, Download, Network, MessageCircle, Info, Cog, Link2, Activity, Bot, FolderSearch, X, Play, Pause, Box } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,7 +9,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Route } from "@/types/routes";
-import { NewChatScreen, NewAgentScreen, BrowseAgentsScreen, ConfigurationScreen, ConnectionsScreen, StatusScreen, NodeStatusScreen, OperatorWelcomeScreen } from "@/screens";
+import { NewChatScreen, NewAgentScreen, BrowseAgentsScreen, ConfigurationScreen, ConnectionsScreen, StatusScreen, NodeStatusScreen, OperatorWelcomeScreen, ModelsScreen } from "@/screens";
 import { getChatSessions } from '@/utils/chatStorage';
 import { ChatSession } from '@/types/chat';
 import { cn } from "@/lib/utils";
@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { useNodeStatus } from '@/hooks/useNodeStatus';
+import { useWakuVersion } from '@/hooks/useWakuVersion';
 
 // Animation variants
 const sidebarVariants = {
@@ -92,7 +94,7 @@ const LogoSection = () => {
       variants={itemVariants}
     >
       <img 
-        src={theme === 'dark' ? '/images/blindbird-white.png' : '/images/blindbird-black.png'} 
+        src={theme !== 'dark' ? '/images/blindbird-white.png' : '/images/blindbird-black.png'} 
         alt="WakuAI" 
         className="w-10 h-10" 
       />
@@ -341,27 +343,23 @@ const OperatorModeNav = ({
           animate={{ rotate: isRunning ? 0 : 0 }}
           className="mr-3 h-4 w-4"
         >
-          {isRunning ? (
-            <motion.div
-              initial={{ scale: 0, rotate: -180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: 180 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            >
-              <Pause className="h-4 w-4" />
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ scale: 0, rotate: 180 }}
-              animate={{ scale: 1, rotate: 0 }}
-              exit={{ scale: 0, rotate: -180 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            >
-              <Play className="h-4 w-4" />
-            </motion.div>
-          )}
+          {isRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
         </motion.div>
-        {isRunning ? 'Running' : 'Start'}
+        {isRunning ? 'Stop Node' : 'Start Node'}
+      </Button>
+
+      <Button
+        variant="ghost"
+        className={cn(
+          "w-full justify-start text-[13px] rounded-xl",
+          activeRoute === 'models'
+            ? "bg-gray-100/50 dark:bg-neutral-800/50 text-gray-900 dark:text-neutral-50"
+            : "text-gray-600 dark:text-neutral-400 hover:bg-gray-100/50 dark:hover:bg-neutral-800/50"
+        )}
+        onClick={() => setActiveRoute('models')}
+      >
+        <Box className="mr-3 h-4 w-4" />
+        Models
       </Button>
 
       {/* Options Section */}
@@ -378,14 +376,6 @@ const OperatorModeNav = ({
               icon={<Cog size={16} />} 
               label="Configuration" 
               route="configuration"
-              currentRoute={activeRoute}
-            />
-          </div>
-          <div onClick={() => setActiveRoute('connections')}>
-            <NavItem 
-              icon={<Link2 size={16} />} 
-              label="Connections" 
-              route="connections"
               currentRoute={activeRoute}
             />
           </div>
@@ -520,11 +510,18 @@ const SwitcherIcon = ({ icon, isActive, onClick }: { icon: React.ReactNode; isAc
 );
 
 // Component for the control buttons
-const ControlButton = ({ icon, onClick, hasIndicator, indicatorColor }: { 
+const ControlButton = ({ 
+  icon, 
+  onClick, 
+  hasIndicator, 
+  indicatorColor,
+  iconColor 
+}: { 
   icon: React.ReactNode; 
   onClick?: () => void; 
   hasIndicator?: boolean;
   indicatorColor?: string;
+  iconColor?: string;
 }) => (
   <motion.div 
     whileHover={{ scale: 1.1 }} 
@@ -537,7 +534,7 @@ const ControlButton = ({ icon, onClick, hasIndicator, indicatorColor }: {
         <div className={`absolute inset-0 rounded-full ${indicatorColor} animate-ping`} />
       </div>
     )}
-    {icon}
+    <div className={iconColor}>{icon}</div>
   </motion.div>
 );
 
@@ -549,6 +546,8 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
   const [activeRoute, setActiveRoute] = useState<Route>('new-chat');
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
   const [isRunning, setIsRunning] = useState(false);
+  const isNodeActive = useNodeStatus();
+  const wakuVersion = useWakuVersion();
 
   // Rotation animation effect
   useEffect(() => {
@@ -602,7 +601,11 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
     switch (activeRoute) {
       // Inference Mode Screens
       case 'new-chat':
-        return <NewChatScreen currentSession={activeSession} onSessionCreate={handleSessionSelect} />;
+        return <NewChatScreen 
+          currentSession={activeSession} 
+          onSessionCreate={handleSessionSelect}
+          isNetwork={isNetwork}
+        />;
       case 'new-agent':
         return <NewAgentScreen />;
       case 'browse-agents':
@@ -611,13 +614,20 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
       // Operator Mode Screens
       case 'configuration':
         return <ConfigurationScreen />;
-      case 'connections':
-        return <ConnectionsScreen />;
+      case 'models':
+        return <ModelsScreen />;
       case 'status':
-        return <NodeStatusScreen isRunning={isRunning} />;
+        return <NodeStatusScreen 
+          isRunning={isRunning} 
+          onToggle={() => setIsRunning(!isRunning)} 
+        />;
       
       default:
-        return <NewChatScreen currentSession={activeSession} onSessionCreate={handleSessionSelect} />;
+        return <NewChatScreen 
+          currentSession={activeSession} 
+          onSessionCreate={handleSessionSelect}
+          isNetwork={isNetwork}
+        />;
     }
   };
 
@@ -698,9 +708,10 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
                   <SheetTrigger asChild>
                     <div>
                       <ControlButton 
-                        icon={<RadioTower className="text-emerald-500 animate-pulse w-4 h-4" />}
+                        icon={<RadioTower className="w-4 h-4" />}
                         hasIndicator
-                        indicatorColor="bg-emerald-500"
+                        indicatorColor={isNodeActive ? "bg-emerald-500" : "bg-neutral-400"}
+                        iconColor={isNodeActive ? "text-emerald-500" : "text-neutral-400"}
                       />
                     </div>
                   </SheetTrigger>
@@ -711,90 +722,87 @@ export default function BaseLayout({ children }: { children: React.ReactNode }) 
                     <div className="px-6">
                       <div className="h-[1px] bg-white/20 dark:bg-neutral-800/50 my-6" />
                       <div className="space-y-6">
-                        <Tabs defaultValue="light" className="w-full">
-                          <TabsList className="w-full grid grid-cols-2 bg-white/20 dark:bg-neutral-800/20 backdrop-blur-sm border border-white/20 dark:border-neutral-800/50 rounded-xl p-1">
-                            <TabsTrigger 
-                              value="light" 
-                              className="rounded-lg text-sm font-medium text-gray-600 dark:text-neutral-400 data-[state=active]:bg-white/40 dark:data-[state=active]:bg-neutral-900/40 data-[state=active]:text-gray-800 dark:data-[state=active]:text-neutral-200 data-[state=active]:shadow-sm"
-                            >
-                              Light Node
-                            </TabsTrigger>
-                            <TabsTrigger 
-                              value="full" 
-                              className="rounded-lg text-sm font-medium text-gray-600 dark:text-neutral-400 data-[state=active]:bg-white/40 dark:data-[state=active]:bg-neutral-900/40 data-[state=active]:text-gray-800 dark:data-[state=active]:text-neutral-200 data-[state=active]:shadow-sm"
-                            >
-                              Full Node
+                        <Tabs defaultValue="full" className="w-full">
+                          <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="full">Full Node</TabsTrigger>
+                            <TabsTrigger value="light" disabled>
+                              <div className="relative group">
+                                <span>Light Node</span>
+                                {/* Tooltip */}
+                                <div className="absolute left-1/2 -translate-x-1/2 -top-12 px-3 py-2 bg-white/60 dark:bg-neutral-900/60 backdrop-blur-xl rounded-lg border border-white/20 dark:border-neutral-800/50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 whitespace-nowrap">
+                                  <span className="text-xs text-gray-800 dark:text-neutral-200">Coming Soon</span>
+                                  <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-white/60 dark:bg-neutral-900/60 rotate-45 border-r border-b border-white/20 dark:border-neutral-800/50"></div>
+                                </div>
+                              </div>
                             </TabsTrigger>
                           </TabsList>
-                          <TabsContent value="light" className="mt-6 space-y-4">
-                            {/* Light Node Content */}
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Connection Status</span>
-                              <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-sm font-medium text-emerald-500">Connected</span>
+
+                          <TabsContent value="">
+                            
+                            <div className="flex items-center justify-center mb-4">
+                              <div 
+                                className={cn(
+                                  "rounded-full w-10 h-10",
+                                  isNodeActive 
+                                    ? "bg-emerald-500 animate-ping" 
+                                    : "bg-neutral-400 animate-pulse"
+                                )}
+                              />
+                            </div>
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Connection Status</span>
+                                <div className="flex items-center space-x-2">
+                                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                  <span className="text-sm font-medium text-emerald-500">Connected</span>
+                                </div>
                               </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Active Peers</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">24</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Network Latency</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">45ms</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Uptime</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">2h 34m</span>
-                            </div>
-                          </TabsContent>
-                          <TabsContent value="full" className="mt-6 space-y-4">
-                            {/* Full Node Content */}
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Connection Status</span>
-                              <div className="flex items-center space-x-2">
-                                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                                <span className="text-sm font-medium text-emerald-500">Connected</span>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Active Peers</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">128</span>
                               </div>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Active Peers</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">128</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Network Latency</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">35ms</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Uptime</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">5h 12m</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Blocks Synced</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">1,234,567</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Storage Used</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">256 GB</span>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Network Latency</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">35ms</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Uptime</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">5h 12m</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Blocks Synced</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">1,234,567</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Storage Used</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">256 GB</span>
+                              </div>
                             </div>
                           </TabsContent>
                         </Tabs>
 
                         {/* Network Stats */}
                         <div>
-                          <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200 mb-4">Network Statistics</h3>
+                          {/* Status Indicator */}
+                          <div className="flex items-center justify-center my-16">
+                            <div 
+                              className={cn(
+                                "rounded-full w-10 h-10",
+                                isNodeActive 
+                                  ? "bg-emerald-500 animate-ping" 
+                                  : "bg-neutral-500 animate-pulse"
+                              )}
+                            />
+                          </div>
+
+                          {/* Network Stats Content */}
                           <div className="space-y-4">
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Messages Processed</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">1,234</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Bandwidth Usage</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">2.3 GB</span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-sm text-gray-600 dark:text-neutral-400">Success Rate</span>
-                              <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">99.9%</span>
+                            <h3 className="text-sm font-medium text-gray-800 dark:text-neutral-200">Network Statistics</h3>
+                            <div className="space-y-4">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-600 dark:text-neutral-400">Waku Version</span>
+                                <span className="text-sm font-medium text-gray-800 dark:text-neutral-200">{wakuVersion || 'Unknown'}</span>
+                              </div>
                             </div>
                           </div>
                         </div>
